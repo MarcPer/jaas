@@ -17,5 +17,5 @@ type TaskRequest struct {
 	Timeout       string
 	RemoveService bool
 	RegistryAuth  string
-	Command       string
+	Command       []string
 }

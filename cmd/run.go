@@ -42,7 +42,7 @@ func init() {
 	runCmd.PersistentFlags().BoolVarP(&taskRequest.ShowLogs, "show-logs", "l", true, "show logs")
 	runCmd.PersistentFlags().StringVarP(&taskRequest.Timeout, "timeout", "t", "60s", "timeout as a Golang duration")
 
-	runCmd.PersistentFlags().StringVarP(&taskRequest.Command, "command", "d", "", "Command to run")
+	runCmd.PersistentFlags().StringSliceVarP(&taskRequest.Command, "command", "d", nil, "Command to run")
 
 	runCmd.PersistentFlags().BoolVarP(&taskRequest.RemoveService, "remove", "r", true, "remove service after running task")
 	runCmd.PersistentFlags().StringVarP(&taskRequest.RegistryAuth, "registry", "a", "", "registry auth string in base64")
