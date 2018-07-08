@@ -94,7 +94,6 @@ func runTask(taskRequest TaskRequest) error {
 	var err error
 	c, err = client.NewEnvClient()
 	if err != nil {
-
 		return fmt.Errorf("is the Docker Daemon running? Error: %s", err.Error())
 	}
 
@@ -116,29 +115,13 @@ func runTask(taskRequest TaskRequest) error {
 		}
 	}
 
-	spec := makeSpec(taskRequest.Image, taskRequest.EnvVars)
-	if len(taskRequest.Networks) > 0 {
-		nets := []swarm.NetworkAttachmentConfig{
-			swarm.NetworkAttachmentConfig{Target: taskRequest.Networks[0]},
-		}
-		spec.Networks = nets
-	}
+	spec := makeServiceSpec(taskRequest)
 
 	createOptions := types.ServiceCreateOptions{}
 
 	if len(taskRequest.RegistryAuth) > 0 {
 		createOptions.EncodedRegistryAuth = taskRequest.RegistryAuth
 		fmt.Println("Using RegistryAuth")
-	}
-
-	placement := &swarm.Placement{}
-	if len(taskRequest.Constraints) > 0 {
-		placement.Constraints = taskRequest.Constraints
-		spec.TaskTemplate.Placement = placement
-	}
-
-	if len(taskRequest.Command) > 0 {
-		spec.TaskTemplate.ContainerSpec.Command = strings.Split(taskRequest.Command, " ")
 	}
 
 	if len(taskRequest.EnvFiles) > 0 {
@@ -152,24 +135,6 @@ func runTask(taskRequest TaskRequest) error {
 			for _, env := range envs {
 				spec.TaskTemplate.ContainerSpec.Env = append(spec.TaskTemplate.ContainerSpec.Env, env)
 			}
-		}
-	}
-
-	spec.TaskTemplate.ContainerSpec.Mounts = []mount.Mount{}
-	for _, bindMount := range taskRequest.Mounts {
-		parts := strings.Split(bindMount, "=")
-		if len(parts) < 2 || len(parts) > 2 {
-			fmt.Fprintf(os.Stderr, "Bind-mounts must be specified as: src=dest, i.e. --mount /home/alex/tmp/=/tmp/\n")
-			os.Exit(1)
-		}
-
-		if len(parts) == 2 {
-			mountVal := mount.Mount{
-				Source: parts[0],
-				Target: parts[1],
-			}
-
-			spec.TaskTemplate.ContainerSpec.Mounts = append(spec.TaskTemplate.ContainerSpec.Mounts, mountVal)
 		}
 	}
 
@@ -214,9 +179,8 @@ func runTask(taskRequest TaskRequest) error {
 	return nil
 }
 
-func makeSpec(image string, envVars []string) swarm.ServiceSpec {
+func makeServiceSpec(tr TaskRequest) swarm.ServiceSpec {
 	max := uint64(1)
-
 	spec := swarm.ServiceSpec{
 		TaskTemplate: swarm.TaskSpec{
 			RestartPolicy: &swarm.RestartPolicy{
@@ -224,12 +188,58 @@ func makeSpec(image string, envVars []string) swarm.ServiceSpec {
 				Condition:   swarm.RestartPolicyConditionNone,
 			},
 			ContainerSpec: &swarm.ContainerSpec{
-				Image: image,
-				Env:   envVars,
+				Image: tr.Image,
+				Env:   tr.EnvVars,
 			},
 		},
 	}
+	attachNetworks(&spec, tr.Networks)
+	setConstraints(&spec, tr.Constraints)
+	setCommand(&spec, tr.Command)
+	attachMounts(&spec, tr.Mounts)
 	return spec
+}
+
+func attachNetworks(spec *swarm.ServiceSpec, networks []string) {
+	if len(networks) > 0 {
+		nets := []swarm.NetworkAttachmentConfig{
+			swarm.NetworkAttachmentConfig{Target: networks[0]},
+		}
+		spec.Networks = nets
+	}
+}
+
+func setConstraints(spec *swarm.ServiceSpec, constraints []string) {
+	if len(constraints) > 0 {
+		placement := &swarm.Placement{Constraints: constraints}
+		spec.TaskTemplate.Placement = placement
+	}
+}
+
+func setCommand(spec *swarm.ServiceSpec, command string) {
+	if len(command) > 0 {
+		spec.TaskTemplate.ContainerSpec.Command = strings.Split(command, " ")
+	}
+}
+
+func attachMounts(spec *swarm.ServiceSpec, mounts []string) {
+	spec.TaskTemplate.ContainerSpec.Mounts = []mount.Mount{}
+	for _, bindMount := range mounts {
+		parts := strings.Split(bindMount, "=")
+		if len(parts) != 2 {
+			fmt.Fprintf(os.Stderr, "Bind-mounts must be specified as: src=dest, i.e. --mount /home/alex/tmp/=/tmp/\n")
+			os.Exit(1)
+		}
+
+		if len(parts) == 2 {
+			mountVal := mount.Mount{
+				Source: parts[0],
+				Target: parts[1],
+			}
+
+			spec.TaskTemplate.ContainerSpec.Mounts = append(spec.TaskTemplate.ContainerSpec.Mounts, mountVal)
+		}
+	}
 }
 
 func readEnvs(file string) ([]string, error) {
