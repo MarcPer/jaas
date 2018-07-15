@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/namesgenerator"
 
 	"github.com/spf13/cobra"
 )
@@ -142,7 +143,9 @@ func runTask(taskRequest TaskRequest) error {
 
 func makeServiceSpec(tr TaskRequest, c clientInterface) swarm.ServiceSpec {
 	max := uint64(1)
+	name := "jaas_" + namesgenerator.GetRandomName(0)
 	spec := swarm.ServiceSpec{
+		Annotations: swarm.Annotations{Name: name},
 		TaskTemplate: swarm.TaskSpec{
 			RestartPolicy: &swarm.RestartPolicy{
 				MaxAttempts: &max,
